@@ -1,0 +1,29 @@
+.subtitle{
+margin-bottom:20px;
+color:#666;
+}
+
+.primary{
+width:100%;
+padding:14px;
+background:#c8e6c9;
+border:none;
+border-radius:15px;
+font-weight:bold;
+cursor:pointer;
+margin-top:10px;
+}
+
+.features{
+margin-top:30px;
+color:#777;
+font-size:14px;
+}
+
+.input{
+width:100%;
+padding:12px;
+border-radius:10px;
+border:1px solid #ddd;
+margin:15px 0;
+}
