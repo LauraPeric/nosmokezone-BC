@@ -7,22 +7,26 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract NoSmokeNFT is ERC721, Ownable {
 
     uint256 public tokenCounter;
+
     mapping(address => uint256) public streaks;
 
     constructor() ERC721("NoSmokeBadge", "NSB") {
         tokenCounter = 0;
     }
 
-    function markDay(address user) public onlyOwner {
-        streaks[user] += 1;
+    //maknut onlyOwner
+    function markDay(address user) public {
 
-        if (streaks[user] == 7 || streaks[user] == 14 || streaks[user] == 21) {
+        streaks[user]++;
+
+        // badge od prvog dana
+        if (streaks[user] >= 1) {
             _safeMint(user, tokenCounter);
             tokenCounter++;
         }
     }
 
-    function relapse(address user) public onlyOwner {
+    function resetStreak(address user) public onlyOwner {
         streaks[user] = 0;
     }
 }

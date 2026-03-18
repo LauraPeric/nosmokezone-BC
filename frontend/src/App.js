@@ -3,6 +3,8 @@ import { useState } from "react";
 import detectEthereumProvider from "@metamask/detect-provider";
 import { CircularProgressbar } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
+import { ethers } from "ethers";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "./contract";
 
 function App() {
 
@@ -10,8 +12,9 @@ function App() {
   const [nickname, setNickname] = useState("");
   const [tempName, setTempName] = useState("");
 
-  const [days, setDays] = useState(12);
-  const [saved, setSaved] = useState(42);
+  const [days, setDays] = useState(0);
+  const [saved, setSaved] = useState(0);
+  const milestones = [1,7,15,30,45,60];
 
   async function connectWallet() {
     const provider = await detectEthereumProvider();
@@ -29,15 +32,44 @@ function App() {
     setScreen("dashboard");
   }
 
-  function smokeFreeToday() {
-    setDays(days + 1);
-    setSaved(saved + 3.5);
-  }
-
   function slippedToday() {
     setDays(0);
     setSaved(0);
   }
+
+ async function markSmokeFree() {
+
+  if (!window.ethereum) {
+    alert("Install MetaMask");
+    return;
+  }
+
+  try {
+
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+
+    const contract = new ethers.Contract(
+      CONTRACT_ADDRESS,
+      CONTRACT_ABI,
+      signer
+    );
+
+    const user = await signer.getAddress();
+
+    const tx = await contract.markDay(user);
+    await tx.wait();
+
+    console.log("Day recorded on blockchain");
+
+    setDays(days + 1);
+    setSaved(saved + 3.5);
+
+  } catch (error) {
+    console.error(error);
+    alert("Transaction failed");
+  }
+}
 
   return (
     <div className="app">
@@ -106,7 +138,7 @@ function App() {
 
             <div className="buttons">
 
-              <button className="good" onClick={smokeFreeToday}>
+              <button className="good" onClick={markSmokeFree}>
                 Smoke-Free Today
               </button>
 
@@ -116,17 +148,27 @@ function App() {
 
             </div>
 
-            <div className="mood">
-              <p>Mood today</p>
+            <div className="badges">
 
-              <div className="emoji">
-                <span>🙂</span>
-                <span>😊</span>
-                <span>😐</span>
-                <span>😢</span>
-                <span>😫</span>
-              </div>
-            </div>
+  <h3>Badges</h3>
+
+  {milestones.map((m) => (
+
+    <div key={m} className="badge">
+
+      <span>Day {m}</span>
+
+      {days >= m ? (
+        <span className="earned">✓ Earned</span>
+      ) : (
+        <span className="locked">🔒 Locked</span>
+      )}
+
+    </div>
+
+  ))}
+
+</div>
 
           </>
         )}
