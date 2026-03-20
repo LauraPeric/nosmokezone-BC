@@ -14,7 +14,8 @@ function App() {
 
   const [days, setDays] = useState(0);
   const [saved, setSaved] = useState(0);
-  const milestones = [1,7,15,30,45,60];
+
+  const milestones = [1,7,15,30,60];
 
   async function connectWallet() {
     const provider = await detectEthereumProvider();
@@ -28,6 +29,12 @@ function App() {
   }
 
   function saveName() {
+
+    if (!tempName.trim()) {
+      alert("Upiši nadimak");
+      return;
+    }
+
     setNickname(tempName);
     setScreen("dashboard");
   }
@@ -37,39 +44,47 @@ function App() {
     setSaved(0);
   }
 
- async function markSmokeFree() {
+  async function markSmokeFree() {
 
-  if (!window.ethereum) {
-    alert("Install MetaMask");
-    return;
+    if (!window.ethereum) {
+      alert("Install MetaMask");
+      return;
+    }
+
+    try {
+
+      const newDay = days + 1;
+
+      if (milestones.includes(newDay)) {
+
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+
+        const contract = new ethers.Contract(
+          CONTRACT_ADDRESS,
+          CONTRACT_ABI,
+          signer
+        );
+
+        const user = await signer.getAddress();
+
+        const tx = await contract.markDay(user);
+        await tx.wait();
+
+        console.log("Milestone recorded on blockchain:", newDay);
+
+      } else {
+        console.log("No milestone, skipping blockchain ");
+      }
+
+      setDays((prev) => prev + 1);
+      setSaved((prev) => prev + 3.5);
+
+    } catch (error) {
+      console.error(error);
+      alert("Transaction failed");
+    }
   }
-
-  try {
-
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-
-    const contract = new ethers.Contract(
-      CONTRACT_ADDRESS,
-      CONTRACT_ABI,
-      signer
-    );
-
-    const user = await signer.getAddress();
-
-    const tx = await contract.markDay(user);
-    await tx.wait();
-
-    console.log("Day recorded on blockchain");
-
-    setDays(days + 1);
-    setSaved(saved + 3.5);
-
-  } catch (error) {
-    console.error(error);
-    alert("Transaction failed");
-  }
-}
 
   return (
     <div className="app">
@@ -100,7 +115,7 @@ function App() {
 
             <input
               className="input"
-              placeholder="Laura"
+              placeholder="Upiši nadimak"
               onChange={(e) => setTempName(e.target.value)}
             />
 
@@ -150,25 +165,22 @@ function App() {
 
             <div className="badges">
 
-  <h3>Badges</h3>
+              <h3>Badges</h3>
 
-  {milestones.map((m) => (
+              {milestones
+                .filter((m) => days >= m)
+                .map((m) => (
 
-    <div key={m} className="badge">
+                  <div key={m} className="badge">
 
-      <span>Day {m}</span>
+                    <span>🔥 Day {m}</span>
+                    <span className="earned">Earned</span>
 
-      {days >= m ? (
-        <span className="earned">✓ Earned</span>
-      ) : (
-        <span className="locked">🔒 Locked</span>
-      )}
+                  </div>
 
-    </div>
+              ))}
 
-  ))}
-
-</div>
+            </div>
 
           </>
         )}
