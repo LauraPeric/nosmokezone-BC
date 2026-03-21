@@ -1,5 +1,5 @@
 import "./App.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import detectEthereumProvider from "@metamask/detect-provider";
 import { CircularProgressbar } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
@@ -15,7 +15,35 @@ function App() {
   const [days, setDays] = useState(0);
   const [saved, setSaved] = useState(0);
 
+  const [newBadge, setNewBadge] = useState(null);
+  const [loading, setLoading] = useState(false);
+
   const milestones = [1,7,15,30,60];
+
+  // ⏳ delay helper
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ✅ LOAD
+  useEffect(() => {
+    const savedDays = localStorage.getItem("days");
+    const savedMoney = localStorage.getItem("saved");
+    const savedName = localStorage.getItem("nickname");
+
+    if (savedDays) setDays(Number(savedDays));
+    if (savedMoney) setSaved(Number(savedMoney));
+if (savedName) {
+  setNickname(savedName);
+}
+  }, []);
+
+  // ✅ SAVE
+  useEffect(() => {
+    localStorage.setItem("days", days);
+    localStorage.setItem("saved", saved);
+    localStorage.setItem("nickname", nickname);
+  }, [days, saved, nickname]);
 
   async function connectWallet() {
     const provider = await detectEthereumProvider();
@@ -29,7 +57,6 @@ function App() {
   }
 
   function saveName() {
-
     if (!tempName.trim()) {
       alert("Upiši nadimak");
       return;
@@ -55,7 +82,10 @@ function App() {
 
       const newDay = days + 1;
 
+      // 🎯 milestone only
       if (milestones.includes(newDay)) {
+
+        setLoading(true);
 
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
@@ -71,18 +101,23 @@ function App() {
         const tx = await contract.markDay(user);
         await tx.wait();
 
-        console.log("Milestone recorded on blockchain:", newDay);
+        console.log("Milestone recorded:", newDay);
 
-      } else {
-        console.log("No milestone, skipping blockchain ");
+        // ⏳ UX delay
+        await delay(2000);
+
+        setLoading(false);
+        setNewBadge(newDay);
       }
 
+      // ✅ update state
       setDays((prev) => prev + 1);
       setSaved((prev) => prev + 3.5);
 
     } catch (error) {
       console.error(error);
       alert("Transaction failed");
+      setLoading(false);
     }
   }
 
@@ -110,7 +145,6 @@ function App() {
         {screen === "nickname" && (
           <>
             <h2>Welcome</h2>
-
             <p>Choose your nickname</p>
 
             <input
@@ -130,7 +164,6 @@ function App() {
             <h2>Hello {nickname}</h2>
 
             <div className="streak-box">
-
               <div>
                 <p>Smoke-free for</p>
                 <h1>{days} days</h1>
@@ -139,11 +172,10 @@ function App() {
               <div className="circle">
                 <CircularProgressbar
                   value={days}
-                  maxValue={30}
+                  maxValue={60}
                   text={`${days}`}
                 />
               </div>
-
             </div>
 
             <div className="savings">
@@ -153,34 +185,44 @@ function App() {
 
             <div className="buttons">
 
-              <button className="good" onClick={markSmokeFree}>
-                Smoke-Free Today
+              <button className="good" onClick={markSmokeFree} disabled={loading}>
+                {loading ? "Minting..." : "Smoke-Free Today"}
               </button>
 
-              <button className="bad" onClick={slippedToday}>
+              <button className="bad" onClick={slippedToday} disabled={loading}>
                 I Slipped Today
               </button>
 
             </div>
 
+            {/* 🏆 BADGES */}
             <div className="badges">
-
               <h3>Badges</h3>
 
               {milestones
                 .filter((m) => days >= m)
                 .map((m) => (
 
-                  <div key={m} className="badge">
-
-                    <span>🔥 Day {m}</span>
-                    <span className="earned">Earned</span>
-
+                  <div key={m} className="badge earned-badge">
+                    <span className="icon">🏆</span>
+                    <span>Day {m}</span>
                   </div>
 
               ))}
-
             </div>
+
+            {/* 🎉 POPUP */}
+            {newBadge && (
+              <div className="popup">
+                <div className="popup-content">
+                  <h2>🎉 New Badge!</h2>
+                  <p>You reached Day {newBadge}!</p>
+                  <button onClick={() => setNewBadge(null)}>
+                    Awesome!
+                  </button>
+                </div>
+              </div>
+            )}
 
           </>
         )}
