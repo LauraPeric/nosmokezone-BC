@@ -71,12 +71,12 @@ h2{
 
 .input{
   width:100%;
-  padding:10px; /* smanjeno */
-  border-radius:10px; /* malo manji radius */
+  padding:10px; 
+  border-radius:10px; 
   border:1px solid #ddd;
   margin:15px 0;
-  font-size:14px; /* malo manji font */
-  box-sizing:border-box; /* sprječava izlazak iz kartice */
+  font-size:14px; 
+  box-sizing:border-box; 
 }
 
 /* STREAK BOX */
@@ -104,7 +104,7 @@ h2{
 /* CIRCLE */
 
 .circle{
-  width:65px; /* smanjeno sa 80px */
+  width:65px; 
 }
 
 /* SAVINGS */

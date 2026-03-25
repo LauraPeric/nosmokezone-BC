@@ -29,7 +29,6 @@ contract SmokeFreeBadges is ERC721URIStorage, Ownable {
 
         _safeMint(user, tokenId);
 
-        // 🔥 OVO JE NAJBITNIJE
         string memory uri = getTokenURI(milestone);
         _setTokenURI(tokenId, uri);
 
@@ -39,19 +38,19 @@ contract SmokeFreeBadges is ERC721URIStorage, Ownable {
     function getTokenURI(uint milestone) internal pure returns (string memory) {
 
         if (milestone == 1) {
-            return "https://your-link/day1.json";
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day1.json";
         }
         if (milestone == 7) {
-            return "https://your-link/day7.json";
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day7.json";
         }
         if (milestone == 15) {
-            return "https://your-link/day15.json";
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day15.json";
         }
         if (milestone == 30) {
-            return "https://your-link/day30.json";
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day30.json";
         }
         if (milestone == 60) {
-            return "https://your-link/day60.json";
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day60.json";
         }
 
         return "";

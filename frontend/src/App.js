@@ -5,6 +5,8 @@ import { CircularProgressbar } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "./contract";
+import { db } from "./firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 
 function App() {
 
@@ -15,45 +17,92 @@ function App() {
   const [days, setDays] = useState(0);
   const [saved, setSaved] = useState(0);
 
+  const [badges, setBadges] = useState([]);
+  const [archivedBadges, setArchivedBadges] = useState([]);
   const [newBadge, setNewBadge] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const milestones = [1,7,15,30,60];
 
-  // ⏳ delay helper
+  const slipText = ["Slipped once", "Slipped twice", "Slipped several times", "Slipped many times", "Slipped often"];
+
   function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // ✅ LOAD
+  // load
   useEffect(() => {
-    const savedDays = localStorage.getItem("days");
-    const savedMoney = localStorage.getItem("saved");
-    const savedName = localStorage.getItem("nickname");
+    const savedDays = sessionStorage.getItem("days");
+    const savedMoney = sessionStorage.getItem("saved");
+    const savedName = sessionStorage.getItem("nickname");
+    const savedBadges = sessionStorage.getItem("badges");
+    const savedArchived = sessionStorage.getItem("archivedBadges");
 
-    if (savedDays) setDays(Number(savedDays));
-    if (savedMoney) setSaved(Number(savedMoney));
-if (savedName) {
-  setNickname(savedName);
-}
+    if (savedDays !== null) setDays(Number(savedDays));
+    if (savedMoney !== null) setSaved(Number(savedMoney));
+    if (savedBadges) setBadges(JSON.parse(savedBadges));
+    if (savedArchived) setArchivedBadges(JSON.parse(savedArchived));
+
+    if (savedName) {
+      setNickname(savedName);
+      setScreen("dashboard");
+    }
+
+    setIsLoaded(true);
   }, []);
 
-  // ✅ SAVE
+  // save
   useEffect(() => {
-    localStorage.setItem("days", days);
-    localStorage.setItem("saved", saved);
-    localStorage.setItem("nickname", nickname);
-  }, [days, saved, nickname]);
+    if (!isLoaded) return;
+
+    sessionStorage.setItem("days", days);
+    sessionStorage.setItem("saved", saved);
+    sessionStorage.setItem("nickname", nickname);
+    sessionStorage.setItem("badges", JSON.stringify(badges));
+    sessionStorage.setItem("archivedBadges", JSON.stringify(archivedBadges));
+  }, [days, saved, nickname, badges, archivedBadges, isLoaded]);
+
+  // autosafe  firebase
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!window.ethereum) return;
+
+    async function sync() {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const user = await signer.getAddress();
+
+        await saveToFirebase(user);
+      } catch (err) {
+        console.log("Firebase sync error:", err);
+      }
+    }
+
+    sync();
+  }, [days, saved, badges, archivedBadges, isLoaded]);
 
   async function connectWallet() {
     const provider = await detectEthereumProvider();
-
-    if (provider) {
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      setScreen("nickname");
-    } else {
+    if (!provider) {
       alert("Install MetaMask");
+      return;
     }
+
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+
+    const userAddress = window.ethereum.selectedAddress;
+
+    const savedName = sessionStorage.getItem("nickname");
+    if (savedName) {
+      setNickname(savedName);
+      setScreen("dashboard");
+    } else {
+      setScreen("nickname");
+    }
+
+    loadFromFirebase(userAddress).catch(err => console.log("Firebase load error:", err));
   }
 
   function saveName() {
@@ -61,30 +110,65 @@ if (savedName) {
       alert("Upiši nadimak");
       return;
     }
-
     setNickname(tempName);
     setScreen("dashboard");
   }
 
   function slippedToday() {
+    setArchivedBadges((prev) => {
+      const updated = [...prev];
+      badges.forEach((day) => {
+        const existing = updated.find(b => b.day === day);
+        if (existing) {
+          existing.slipped += 1; // povećaj slip
+        } else {
+          updated.push({ day, slipped: 1 }); // novi badge u archived
+        }
+      });
+      return updated.sort((a,b)=>a.day-b.day);
+    });
+
     setDays(0);
     setSaved(0);
+    setBadges([]);
+    setNewBadge(null);
+  }
+
+  async function saveToFirebase(userAddress) {
+    console.log("X Saving to Firebase:", { userAddress, days, saved, badges, archivedBadges });
+    await setDoc(doc(db, "users", userAddress), {
+      days,
+      saved,
+      badges,
+      archivedBadges
+    });
+    console.log("+ Saved to Firebase!");
+  }
+
+  async function loadFromFirebase(userAddress) {
+    const docRef = doc(db, "users", userAddress);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+
+      setDays(data.days || 0);
+      setSaved(data.saved || 0);
+      setBadges(data.badges || []);
+      setArchivedBadges(data.archivedBadges || []);
+    }
   }
 
   async function markSmokeFree() {
-
     if (!window.ethereum) {
       alert("Install MetaMask");
       return;
     }
 
     try {
-
       const newDay = days + 1;
 
-      // 🎯 milestone only
       if (milestones.includes(newDay)) {
-
         setLoading(true);
 
         const provider = new ethers.BrowserProvider(window.ethereum);
@@ -97,20 +181,23 @@ if (savedName) {
         );
 
         const user = await signer.getAddress();
-
         const tx = await contract.markDay(user);
         await tx.wait();
 
-        console.log("Milestone recorded:", newDay);
+        const streak = await contract.streaks(user);
+        console.log("ON-CHAIN streak:", Number(streak));
 
-        // ⏳ UX delay
         await delay(2000);
-
         setLoading(false);
+
         setNewBadge(newDay);
+
+        setBadges((prev) => {
+          if (!prev.includes(newDay)) return [...prev, newDay];
+          return prev;
+        });
       }
 
-      // ✅ update state
       setDays((prev) => prev + 1);
       setSaved((prev) => prev + 3.5);
 
@@ -184,7 +271,6 @@ if (savedName) {
             </div>
 
             <div className="buttons">
-
               <button className="good" onClick={markSmokeFree} disabled={loading}>
                 {loading ? "Minting..." : "Smoke-Free Today"}
               </button>
@@ -192,26 +278,40 @@ if (savedName) {
               <button className="bad" onClick={slippedToday} disabled={loading}>
                 I Slipped Today
               </button>
-
             </div>
 
-            {/* 🏆 BADGES */}
             <div className="badges">
               <h3>Badges</h3>
-
-              {milestones
-                .filter((m) => days >= m)
-                .map((m) => (
-
-                  <div key={m} className="badge earned-badge">
-                    <span className="icon">🏆</span>
-                    <span>Day {m}</span>
-                  </div>
-
+              {badges.length === 0 && <p>No badges yet</p>}
+              {badges.map((m) => (
+                <div key={m} className="badge earned-badge">
+                  <span className="icon">🏆</span>
+                  <span>Day {m}</span>
+                </div>
               ))}
             </div>
 
-            {/* 🎉 POPUP */}
+            {archivedBadges.length > 0 && (
+              <div className="badges archived">
+                <h3>Past Achievements</h3>
+                {archivedBadges.map((b, i) => {
+                  let slipDisplay = "";
+                  if (b.slipped === 1) slipDisplay = slipText[0];
+                  else if (b.slipped === 2) slipDisplay = slipText[1];
+                  else if (b.slipped === 3) slipDisplay = slipText[2];
+                  else if (b.slipped === 4) slipDisplay = slipText[3];
+                  else slipDisplay = slipText[4]; // 5 ili više
+
+                  return (
+                    <div key={i} className="badge locked-badge">
+                      <span className="icon">🔒</span>
+                      <span>Day {b.day} ({slipDisplay})</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {newBadge && (
               <div className="popup">
                 <div className="popup-content">
