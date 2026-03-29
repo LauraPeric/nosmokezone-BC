@@ -9,7 +9,6 @@ import { db } from "./firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
 function App() {
-
   const [screen, setScreen] = useState("welcome");
   const [nickname, setNickname] = useState("");
   const [tempName, setTempName] = useState("");
@@ -23,25 +22,26 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const milestones = [1,7,15,30,60];
-
-  const slipText = ["Slipped once", "Slipped twice", "Slipped several times", "Slipped many times", "Slipped often"];
+  const slipText = [
+    "Slipped once",
+    "Slipped twice",
+    "Slipped several times",
+    "Slipped many times",
+    "Slipped often",
+  ];
 
   function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  // load
   useEffect(() => {
     const savedDays = sessionStorage.getItem("days");
     const savedMoney = sessionStorage.getItem("saved");
     const savedName = sessionStorage.getItem("nickname");
-    const savedBadges = sessionStorage.getItem("badges");
     const savedArchived = sessionStorage.getItem("archivedBadges");
 
     if (savedDays !== null) setDays(Number(savedDays));
     if (savedMoney !== null) setSaved(Number(savedMoney));
-    if (savedBadges) setBadges(JSON.parse(savedBadges));
     if (savedArchived) setArchivedBadges(JSON.parse(savedArchived));
 
     if (savedName) {
@@ -52,18 +52,15 @@ function App() {
     setIsLoaded(true);
   }, []);
 
-  // save
   useEffect(() => {
     if (!isLoaded) return;
 
     sessionStorage.setItem("days", days);
     sessionStorage.setItem("saved", saved);
     sessionStorage.setItem("nickname", nickname);
-    sessionStorage.setItem("badges", JSON.stringify(badges));
     sessionStorage.setItem("archivedBadges", JSON.stringify(archivedBadges));
-  }, [days, saved, nickname, badges, archivedBadges, isLoaded]);
+  }, [days, saved, nickname, archivedBadges, isLoaded]);
 
-  // autosafe  firebase
   useEffect(() => {
     if (!isLoaded) return;
     if (!window.ethereum) return;
@@ -73,7 +70,6 @@ function App() {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const user = await signer.getAddress();
-
         await saveToFirebase(user);
       } catch (err) {
         console.log("Firebase sync error:", err);
@@ -91,7 +87,6 @@ function App() {
     }
 
     await window.ethereum.request({ method: "eth_requestAccounts" });
-
     const userAddress = window.ethereum.selectedAddress;
 
     const savedName = sessionStorage.getItem("nickname");
@@ -102,7 +97,9 @@ function App() {
       setScreen("nickname");
     }
 
-    loadFromFirebase(userAddress).catch(err => console.log("Firebase load error:", err));
+    loadFromFirebase(userAddress).catch((err) =>
+      console.log("Firebase load error:", err)
+    );
   }
 
   function saveName() {
@@ -114,19 +111,61 @@ function App() {
     setScreen("dashboard");
   }
 
-  function slippedToday() {
-    setArchivedBadges((prev) => {
-      const updated = [...prev];
-      badges.forEach((day) => {
-        const existing = updated.find(b => b.day === day);
-        if (existing) {
-          existing.slipped += 1; // povećaj slip
-        } else {
-          updated.push({ day, slipped: 1 }); // novi badge u archived
+  async function markSmokeFree() {
+    if (!window.ethereum) {
+      alert("Install MetaMask");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const tx = await contract.markSmokeFree();
+      await tx.wait();
+
+      const user = await signer.getAddress();
+
+      const [streak] = await contract.getUserData(user);
+      const tokens = await contract.getUserTokens(user);
+
+      let newBadges = [];
+
+      for (let t of tokens) {
+        const m = await contract.getMilestone(t);
+        const milestone = Number(m);
+
+        // pbriši duplikate
+        if (!newBadges.includes(milestone)) {
+          newBadges.push(milestone);
         }
-      });
-      return updated.sort((a,b)=>a.day-b.day);
-    });
+      }
+
+      setDays(Number(streak));
+      setSaved(Number(streak) * 3.5);
+      setBadges(newBadges);
+
+      if (newBadges.includes(Number(streak))) {
+        setNewBadge(Number(streak));
+      }
+
+      setLoading(false);
+
+    } catch (error) {
+      console.error(error);
+      alert("Transaction failed");
+      setLoading(false);
+    }
+  }
+
+  function slippedToday() {
+    setArchivedBadges((prev) => [
+      ...prev,
+      ...badges.map((day) => ({ day, slipped: 1 })),
+    ]);
 
     setDays(0);
     setSaved(0);
@@ -135,12 +174,18 @@ function App() {
   }
 
   async function saveToFirebase(userAddress) {
-    console.log("X Saving to Firebase:", { userAddress, days, saved, badges, archivedBadges });
+    console.log("X Saving to Firebase:", {
+      userAddress,
+      days,
+      saved,
+      badges,
+      archivedBadges,
+    });
     await setDoc(doc(db, "users", userAddress), {
       days,
       saved,
       badges,
-      archivedBadges
+      archivedBadges,
     });
     console.log("+ Saved to Firebase!");
   }
@@ -154,64 +199,15 @@ function App() {
 
       setDays(data.days || 0);
       setSaved(data.saved || 0);
-      setBadges(data.badges || []);
+
+      // badges se NE učitavaju iz Firebase-a
       setArchivedBadges(data.archivedBadges || []);
-    }
-  }
-
-  async function markSmokeFree() {
-    if (!window.ethereum) {
-      alert("Install MetaMask");
-      return;
-    }
-
-    try {
-      const newDay = days + 1;
-
-      if (milestones.includes(newDay)) {
-        setLoading(true);
-
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-
-        const contract = new ethers.Contract(
-          CONTRACT_ADDRESS,
-          CONTRACT_ABI,
-          signer
-        );
-
-        const user = await signer.getAddress();
-        const tx = await contract.markDay(user);
-        await tx.wait();
-
-        const streak = await contract.streaks(user);
-        console.log("ON-CHAIN streak:", Number(streak));
-
-        await delay(2000);
-        setLoading(false);
-
-        setNewBadge(newDay);
-
-        setBadges((prev) => {
-          if (!prev.includes(newDay)) return [...prev, newDay];
-          return prev;
-        });
-      }
-
-      setDays((prev) => prev + 1);
-      setSaved((prev) => prev + 3.5);
-
-    } catch (error) {
-      console.error(error);
-      alert("Transaction failed");
-      setLoading(false);
     }
   }
 
   return (
     <div className="app">
       <div className="card">
-
         {screen === "welcome" && (
           <>
             <h1>NoSmokeZone</h1>
@@ -257,11 +253,7 @@ function App() {
               </div>
 
               <div className="circle">
-                <CircularProgressbar
-                  value={days}
-                  maxValue={60}
-                  text={`${days}`}
-                />
+                <CircularProgressbar value={days} maxValue={60} text={`${days}`} />
               </div>
             </div>
 
@@ -300,14 +292,16 @@ function App() {
                   else if (b.slipped === 2) slipDisplay = slipText[1];
                   else if (b.slipped === 3) slipDisplay = slipText[2];
                   else if (b.slipped === 4) slipDisplay = slipText[3];
-                  else slipDisplay = slipText[4]; // 5 ili više
+                  else slipDisplay = slipText[4];
 
                   return (
                     <div key={i} className="badge locked-badge">
                       <span className="icon">🔒</span>
-                      <span>Day {b.day} ({slipDisplay})</span>
+                      <span>
+                        Day {b.day} ({slipDisplay})
+                      </span>
                     </div>
-                  )
+                  );
                 })}
               </div>
             )}
@@ -317,16 +311,12 @@ function App() {
                 <div className="popup-content">
                   <h2>🎉 New Badge!</h2>
                   <p>You reached Day {newBadge}!</p>
-                  <button onClick={() => setNewBadge(null)}>
-                    Awesome!
-                  </button>
+                  <button onClick={() => setNewBadge(null)}>Awesome!</button>
                 </div>
               </div>
             )}
-
           </>
         )}
-
       </div>
     </div>
   );
