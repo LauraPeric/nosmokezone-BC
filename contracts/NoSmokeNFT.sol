@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
-contract NoSmokeNFT is ERC721 {
+contract NoSmokeNFT is ERC721URIStorage {
+
     struct UserData {
         uint256 streak;
         uint256 lastUpdate;
@@ -57,7 +58,10 @@ contract NoSmokeNFT is ERC721 {
             keccak256(abi.encodePacked(user, milestone, block.timestamp))
         );
 
-        _mint(user, tokenId);
+        _safeMint(user, tokenId);
+
+        // ✅ DODANO → metadata (slike)
+        _setTokenURI(tokenId, getTokenURI(milestone));
 
         milestones[tokenId] = MilestoneNFT({
             milestone: milestone,
@@ -65,6 +69,28 @@ contract NoSmokeNFT is ERC721 {
         });
 
         userTokens[user].push(tokenId);
+    }
+
+    // ✅ DODANO → iz SmokeFreeBadges
+    function getTokenURI(uint milestone) internal pure returns (string memory) {
+
+        if (milestone == 1) {
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day1.json";
+        }
+        if (milestone == 7) {
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day7.json";
+        }
+        if (milestone == 15) {
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day15.json";
+        }
+        if (milestone == 30) {
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day30.json";
+        }
+        if (milestone == 60) {
+            return "https://raw.githubusercontent.com/LauraPeric/nosmokezone-BC/b8dfb55/metadata/day60.json";
+        }
+
+        return "";
     }
 
     function getUserData(address user) external view returns (uint, uint) {

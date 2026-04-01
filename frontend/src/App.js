@@ -5,8 +5,6 @@ import { CircularProgressbar } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "./contract";
-import { db } from "./firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
 
 function App() {
   const [screen, setScreen] = useState("welcome");
@@ -21,6 +19,8 @@ function App() {
   const [newBadge, setNewBadge] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const milestones = [1, 7, 15, 30, 60];
 
   const slipText = [
     "Slipped once",
@@ -61,24 +61,6 @@ function App() {
     sessionStorage.setItem("archivedBadges", JSON.stringify(archivedBadges));
   }, [days, saved, nickname, archivedBadges, isLoaded]);
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!window.ethereum) return;
-
-    async function sync() {
-      try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const user = await signer.getAddress();
-        await saveToFirebase(user);
-      } catch (err) {
-        console.log("Firebase sync error:", err);
-      }
-    }
-
-    sync();
-  }, [days, saved, badges, archivedBadges, isLoaded]);
-
   async function connectWallet() {
     const provider = await detectEthereumProvider();
     if (!provider) {
@@ -89,6 +71,8 @@ function App() {
     await window.ethereum.request({ method: "eth_requestAccounts" });
     const userAddress = window.ethereum.selectedAddress;
 
+    console.log("✅ CONNECTED WALLET:", userAddress);
+
     const savedName = sessionStorage.getItem("nickname");
     if (savedName) {
       setNickname(savedName);
@@ -96,10 +80,6 @@ function App() {
     } else {
       setScreen("nickname");
     }
-
-    loadFromFirebase(userAddress).catch((err) =>
-      console.log("Firebase load error:", err)
-    );
   }
 
   function saveName() {
@@ -111,98 +91,103 @@ function App() {
     setScreen("dashboard");
   }
 
-  async function markSmokeFree() {
-    if (!window.ethereum) {
-      alert("Install MetaMask");
+async function markSmokeFree() {
+  if (!window.ethereum) {
+    alert("Install MetaMask");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    console.log("CLICKED Smoke Free Today");
+
+    const newDay = days + 1;
+
+    // NETWORK CHECK
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const network = await provider.getNetwork();
+
+    const EXPECTED_CHAIN_ID = 11155111;
+
+    if (Number(network.chainId) !== EXPECTED_CHAIN_ID) {
+      alert("Wrong network! Please switch network in MetaMask.");
+      setLoading(false);
       return;
     }
 
-    try {
-      setLoading(true);
+    // AKO NIJE milestone → odmah update
+    if (!milestones.includes(newDay)) {
+      console.log("⏭ NO MILESTONE → LOCAL UPDATE");
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-
-      const tx = await contract.markSmokeFree();
-      await tx.wait();
-
-      const user = await signer.getAddress();
-
-      const [streak] = await contract.getUserData(user);
-      const tokens = await contract.getUserTokens(user);
-
-      let newBadges = [];
-
-      for (let t of tokens) {
-        const m = await contract.getMilestone(t);
-        const milestone = Number(m);
-
-        // pbriši duplikate
-        if (!newBadges.includes(milestone)) {
-          newBadges.push(milestone);
-        }
-      }
-
-      setDays(Number(streak));
-      setSaved(Number(streak) * 3.5);
-      setBadges(newBadges);
-
-      if (newBadges.includes(Number(streak))) {
-        setNewBadge(Number(streak));
-      }
+      setDays(newDay);
+      setSaved(newDay * 3.5);
 
       setLoading(false);
-
-    } catch (error) {
-      console.error(error);
-      alert("Transaction failed");
-      setLoading(false);
+      return;
     }
+
+    console.log("MILESTONE HIT → SENDING TX");
+
+    const signer = await provider.getSigner();
+    const user = await signer.getAddress();
+
+    console.log("USER ADDRESS:", user);
+
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+    const tx = await contract.markSmokeFree();
+
+    console.log("TX HASH:", tx.hash);
+
+    await tx.wait();
+
+    console.log("TX CONFIRMED");
+
+    // TEK NAKON USPJEŠNOG TX → UPDATE UI
+    setDays(newDay);
+    setSaved(newDay * 3.5);
+
+    setBadges((prev) => {
+      if (prev.includes(newDay)) return prev;
+      return [...prev, newDay];
+    });
+
+    setNewBadge(newDay);
+
+    setLoading(false);
+
+  } catch (error) {
+    console.error("ERROR:", error);
+    alert("Transaction failed");
+    setLoading(false);
   }
+}
 
   function slippedToday() {
-    setArchivedBadges((prev) => [
-      ...prev,
-      ...badges.map((day) => ({ day, slipped: 1 })),
-    ]);
+    setArchivedBadges((prev) => {
+      const updated = [...prev];
+
+      badges.forEach((day) => {
+        const existingIndex = updated.findIndex((b) => b.day === day);
+
+        if (existingIndex !== -1) {
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            slipped: updated[existingIndex].slipped + 1,
+          };
+        } else {
+          updated.push({ day, slipped: 1 });
+        }
+      });
+
+      return updated;
+    });
 
     setDays(0);
     setSaved(0);
     setBadges([]);
     setNewBadge(null);
-  }
-
-  async function saveToFirebase(userAddress) {
-    console.log("X Saving to Firebase:", {
-      userAddress,
-      days,
-      saved,
-      badges,
-      archivedBadges,
-    });
-    await setDoc(doc(db, "users", userAddress), {
-      days,
-      saved,
-      badges,
-      archivedBadges,
-    });
-    console.log("+ Saved to Firebase!");
-  }
-
-  async function loadFromFirebase(userAddress) {
-    const docRef = doc(db, "users", userAddress);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-
-      setDays(data.days || 0);
-      setSaved(data.saved || 0);
-
-      // badges se NE učitavaju iz Firebase-a
-      setArchivedBadges(data.archivedBadges || []);
-    }
   }
 
   return (
