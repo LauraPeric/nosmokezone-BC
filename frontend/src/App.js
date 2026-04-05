@@ -20,6 +20,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const [fadeOut, setFadeOut] = useState(false);
+
   const milestones = [1, 7, 15, 30, 60];
 
   const slipText = [
@@ -61,6 +63,25 @@ function App() {
     sessionStorage.setItem("archivedBadges", JSON.stringify(archivedBadges));
   }, [days, saved, nickname, archivedBadges, isLoaded]);
 
+useEffect(() => {
+  if (newBadge) {
+    setFadeOut(false);
+
+    const fadeTimer = setTimeout(() => {
+      setFadeOut(true); // pokrene fade
+    }, 8000); // nakon 8s krene nestajanje
+
+    const removeTimer = setTimeout(() => {
+      setNewBadge(null); // makne ga skroz
+    }, 10000); // nestane nakon 10s
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
+  }
+}, [newBadge]);
+
   async function connectWallet() {
     const provider = await detectEthereumProvider();
     if (!provider) {
@@ -71,7 +92,7 @@ function App() {
     await window.ethereum.request({ method: "eth_requestAccounts" });
     const userAddress = window.ethereum.selectedAddress;
 
-    console.log("✅ CONNECTED WALLET:", userAddress);
+    console.log(" CONNECTED WALLET:", userAddress);
 
     const savedName = sessionStorage.getItem("nickname");
     if (savedName) {
@@ -116,9 +137,9 @@ async function markSmokeFree() {
       return;
     }
 
-    // AKO NIJE milestone → odmah update
+    // AKO NIJE milestone odmah update
     if (!milestones.includes(newDay)) {
-      console.log("⏭ NO MILESTONE → LOCAL UPDATE");
+      console.log("⏭ NO MILESTONE LOCAL UPDATE");
 
       setDays(newDay);
       setSaved(newDay * 3.5);
@@ -126,8 +147,8 @@ async function markSmokeFree() {
       setLoading(false);
       return;
     }
-
-    console.log("MILESTONE HIT → SENDING TX");
+console.log("NEW DAY:", newDay);
+    console.log("MILESTONE HIT SENDING TX");
 
     const signer = await provider.getSigner();
     const user = await signer.getAddress();
@@ -144,7 +165,7 @@ async function markSmokeFree() {
 
     console.log("TX CONFIRMED");
 
-    // TEK NAKON USPJEŠNOG TX → UPDATE UI
+    // TEK NAKON USPJEŠNOG TX UPDATE UI
     setDays(newDay);
     setSaved(newDay * 3.5);
 
@@ -217,11 +238,11 @@ async function markSmokeFree() {
 
             <input
               className="input"
-              placeholder="Upiši nadimak"
+              placeholder="Type right here..."
               onChange={(e) => setTempName(e.target.value)}
             />
 
-            <button className="primary" onClick={saveName}>
+            <button className="primary small-btn" onClick={saveName}>
               Continue
             </button>
           </>
@@ -259,7 +280,7 @@ async function markSmokeFree() {
 
             <div className="badges">
               <h3>Badges</h3>
-              {badges.length === 0 && <p>No badges yet</p>}
+              {badges.length === 0 && <p>No badges yet!</p>}
               {badges.map((m) => (
                 <div key={m} className="badge earned-badge">
                   <span className="icon">🏆</span>
@@ -292,7 +313,7 @@ async function markSmokeFree() {
             )}
 
             {newBadge && (
-              <div className="popup">
+              <div className={`popup ${fadeOut ? "fade-out" : ""}`}>
                 <div className="popup-content">
                   <h2>🎉 New Badge!</h2>
                   <p>You reached Day {newBadge}!</p>

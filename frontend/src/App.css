@@ -53,6 +53,12 @@ h2{
   cursor:pointer;
   transition:0.2s;
 }
+.small-btn{
+  width:auto;          /* makne full width */
+  padding:12px 24px;  /* ostavi isti feel, samo kraći */
+  display:block;
+  margin:0 auto;      /* centriran */
+}
 
 .primary:hover{
   transform:scale(1.03);
@@ -122,7 +128,22 @@ h2{
   margin-top:5px;
   font-size:36px;
 }
+.popup{
+  animation: fadeIn 0.3s ease;
+  opacity:1;
+  transform:translateY(0);
+  transition:opacity 1s ease, transform 1s ease;
+}
 
+.popup.fade-out{
+  opacity:0;
+  transform:translateY(10px); /* lagano tone dolje */
+}
+
+@keyframes fadeIn{
+  from { opacity:0; transform:translateY(10px); }
+  to { opacity:1; transform:translateY(0); }
+}
 /* BUTTONS */
 
 .buttons{
