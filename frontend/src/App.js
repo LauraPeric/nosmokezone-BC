@@ -112,8 +112,8 @@ useEffect(() => {
     setScreen("dashboard");
   }
 
-async function markSmokeFree() {
-  if (!window.ethereum) {
+  async function markSmokeFree() {
+   if (!window.ethereum) {
     alert("Install MetaMask");
     return;
   }
@@ -147,7 +147,7 @@ async function markSmokeFree() {
       setLoading(false);
       return;
     }
-console.log("NEW DAY:", newDay);
+    console.log("NEW DAY:", newDay);
     console.log("MILESTONE HIT SENDING TX");
 
     const signer = await provider.getSigner();
@@ -184,32 +184,51 @@ console.log("NEW DAY:", newDay);
     setLoading(false);
   }
 }
+ //promjejneno - potrebno provjeriti. 
+  async function slippedToday() {
 
-  function slippedToday() {
-    setArchivedBadges((prev) => {
-      const updated = [...prev];
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
 
-      badges.forEach((day) => {
-        const existingIndex = updated.findIndex((b) => b.day === day);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-        if (existingIndex !== -1) {
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            slipped: updated[existingIndex].slipped + 1,
-          };
-        } else {
-          updated.push({ day, slipped: 1 });
-        }
-      });
+    console.log("🔄 Resetting streak on blockchain...");
 
-      return updated;
-    });
+    const tx = await contract.resetStreak();
+    console.log("TX HASH:", tx.hash);
 
-    setDays(0);
-    setSaved(0);
-    setBadges([]);
-    setNewBadge(null);
+    await tx.wait();
+
+    console.log("STREAK RESET ON BLOCKCHAIN");
+  } catch (err) {
+    console.error("RESET FAILED:", err);
   }
+
+  setArchivedBadges((prev) => {
+    const updated = [...prev];
+
+    badges.forEach((day) => {
+      const existingIndex = updated.findIndex((b) => b.day === day);
+
+      if (existingIndex !== -1) {
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          slipped: updated[existingIndex].slipped + 1,
+        };
+      } else {
+        updated.push({ day, slipped: 1 });
+      }
+    }); 
+
+    return updated;
+  });
+
+  setDays(0);
+  setSaved(0);
+  setBadges([]);
+  setNewBadge(null);
+}
 
   return (
     <div className="app">

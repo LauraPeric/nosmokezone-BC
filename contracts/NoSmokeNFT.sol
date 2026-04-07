@@ -24,10 +24,15 @@ contract NoSmokeNFT is ERC721 {
     constructor(address _badgeContract) ERC721("NoSmokeNFT", "NSNFT") {
         badgeContract = _badgeContract;
     }
-    // zadnje dodano, ali nigdej na ne ispisuje
- function getStreak(address user) external view returns (uint256) {
-    return users[user].streak;
-}
+    
+    function getStreak(address user) external view returns (uint256) { 
+      return users[user].streak;
+    }
+   
+    function resetStreak() external {
+      users[msg.sender].streak = 0;
+    }
+    
     function markSmokeFree() external {
         UserData storage user = users[msg.sender];
         // dodati za stvarnu upotrebu
