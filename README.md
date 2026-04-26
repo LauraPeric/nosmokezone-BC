@@ -7,6 +7,8 @@
 **Student:** Laura Perić
 
 ---
+## 🚀 Pregled projekta
+NoSmokeZone je decentralizirana blockchain aplikacija osmišljena za poticanje prestanka pušenja kroz gamifikaciju. Koristi pametne ugovore na Ethereum (Sepolia) mreži za praćenje napretka korisnika i dodjelu NFT nagrada, uz React frontend za interakciju s korisnikom.
 
 ## 🧠 Opis projekta
 
